@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "image2point"
-version = "0.1.3"
+version = "0.1.0"
 description = "MoGe-3 tracked-camera point clouds for VFX occlusion, via ComfyUI and Houdini"
 readme = "README.md"
 license = "MIT"

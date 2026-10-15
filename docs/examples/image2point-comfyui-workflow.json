@@ -1,0 +1,638 @@
+{
+  "id": "c1d7775e-3b7b-4816-9e0e-1a23ef611793",
+  "revision": 0,
+  "last_node_id": 178,
+  "last_link_id": 424,
+  "nodes": [
+    {
+      "id": 9,
+      "type": "VHS_LoadImagesPath",
+      "pos": [
+        -1993.100039594648,
+        -931.1074556582391
+      ],
+      "size": [
+        574.263027926462,
+        170
+      ],
+      "flags": {},
+      "order": 0,
+      "mode": 0,
+      "inputs": [
+        {
+          "name": "meta_batch",
+          "shape": 7,
+          "type": "VHS_BatchManager",
+          "link": null
+        }
+      ],
+      "outputs": [
+        {
+          "name": "IMAGE",
+          "type": "IMAGE",
+          "links": [
+            8
+          ]
+        },
+        {
+          "name": "MASK",
+          "type": "MASK",
+          "links": null
+        },
+        {
+          "name": "frame_count",
+          "type": "INT",
+          "links": null
+        }
+      ],
+      "properties": {
+        "Node name for S&R": "VHS_LoadImagesPath"
+      },
+      "widgets_values": {
+        "directory": "PATH/TO/PLATE_SEQUENCE",
+        "image_load_cap": 24,
+        "skip_first_images": 0,
+        "select_every_nth": 1,
+        "videopreview": {
+          "hidden": false,
+          "paused": false,
+          "params": {
+            "image_load_cap": 24,
+            "skip_first_images": 0,
+            "select_every_nth": 1,
+            "filename": "PATH/TO/PLATE_SEQUENCE",
+            "type": "path",
+            "format": "folder"
+          }
+        }
+      },
+      "widgets_values_named": {
+        "directory": "PATH/TO/PLATE_SEQUENCE",
+        "image_load_cap": 24,
+        "skip_first_images": 0,
+        "select_every_nth": 1,
+        "videopreview": {
+          "hidden": false,
+          "paused": false,
+          "params": {
+            "image_load_cap": 24,
+            "skip_first_images": 0,
+            "select_every_nth": 1,
+            "filename": "PATH/TO/PLATE_SEQUENCE",
+            "type": "path",
+            "format": "folder"
+          }
+        }
+      }
+    },
+    {
+      "id": 13,
+      "type": "ResizeImageMaskNode",
+      "pos": [
+        -1698.6457197729185,
+        -682.4250356843506
+      ],
+      "size": [
+        270,
+        106
+      ],
+      "flags": {},
+      "order": 3,
+      "mode": 0,
+      "inputs": [
+        {
+          "name": "input",
+          "type": "IMAGE,MASK",
+          "link": 8
+        }
+      ],
+      "outputs": [
+        {
+          "name": "resized",
+          "type": "IMAGE",
+          "links": [
+            408
+          ]
+        }
+      ],
+      "properties": {
+        "Node name for S&R": "ResizeImageMaskNode"
+      },
+      "widgets_values": [
+        "scale by multiplier",
+        0.5,
+        "area"
+      ],
+      "widgets_values_named": {
+        "resize_type": "scale by multiplier",
+        "resize_type.multiplier": 0.5,
+        "scale_method": "area"
+      }
+    },
+    {
+      "id": 131,
+      "type": "PreviewPointCloud",
+      "pos": [
+        -111.19582479832427,
+        -908.6257999488716
+      ],
+      "size": [
+        865.7591480763317,
+        512.4735837011442
+      ],
+      "flags": {},
+      "order": 6,
+      "mode": 0,
+      "inputs": [
+        {
+          "name": "model_3d",
+          "type": "FILE_3D_POINT_CLOUD_ANY,FILE_3D_PLY",
+          "link": 406
+        },
+        {
+          "name": "model_3d_info",
+          "shape": 7,
+          "type": "LOAD3D_MODEL_INFO",
+          "link": null
+        },
+        {
+          "name": "camera_info",
+          "shape": 7,
+          "type": "LOAD3D_CAMERA",
+          "link": null
+        }
+      ],
+      "outputs": [
+        {
+          "name": "model_3d",
+          "type": "FILE_3D_POINT_CLOUD_ANY",
+          "links": null
+        },
+        {
+          "name": "model_3d_info",
+          "type": "LOAD3D_MODEL_INFO",
+          "links": null
+        },
+        {
+          "name": "camera_info",
+          "type": "LOAD3D_CAMERA",
+          "links": null
+        },
+        {
+          "name": "width",
+          "type": "INT",
+          "links": null
+        },
+        {
+          "name": "height",
+          "type": "INT",
+          "links": null
+        }
+      ],
+      "properties": {
+        "Node name for S&R": "PreviewPointCloud",
+        "Camera Config": {
+          "cameraType": "perspective",
+          "fov": 35,
+          "state": {
+            "position": {
+              "x": -0.09933963526117172,
+              "y": -0.14644968349194604,
+              "z": 1.282956331430025
+            },
+            "target": {
+              "x": -0.00271420540906464,
+              "y": -0.18145524167507923,
+              "z": -0.1303358444474966
+            },
+            "zoom": 1,
+            "cameraType": "perspective",
+            "quaternion": {
+              "x": -0.012345536509441214,
+              "y": -0.03412217570906956,
+              "z": -0.00042153421935186257,
+              "w": 0.9993413266557506
+            },
+            "fov": 35,
+            "aspect": 2.4375,
+            "near": 0.01,
+            "far": 10000,
+            "frustum": {
+              "left": -5,
+              "right": 5,
+              "top": 5,
+              "bottom": -5
+            }
+          }
+        },
+        "Last Time Model File": "preview_pointcloud_0e75629a52404b69b2a820c07603ef8e.ply [temp]",
+        "Light Config": {
+          "intensity": 1.9200000000000004,
+          "hdri": {
+            "enabled": false,
+            "hdriPath": "",
+            "showAsBackground": false,
+            "intensity": 1
+          }
+        },
+        "Model Config": {
+          "upDirection": "original",
+          "materialMode": "pointCloud",
+          "showSkeleton": false,
+          "gizmo": {
+            "enabled": false,
+            "mode": "translate",
+            "position": {
+              "x": 0,
+              "y": 0,
+              "z": 0
+            },
+            "rotation": {
+              "x": 0,
+              "y": 0,
+              "z": 0
+            },
+            "scale": {
+              "x": 1,
+              "y": 1,
+              "z": 1
+            }
+          }
+        },
+        "Scene Config": {
+          "showGrid": false,
+          "backgroundColor": "#282828",
+          "backgroundImage": "",
+          "backgroundRenderMode": "tiled",
+          "models": [
+            {
+              "position": {
+                "x": 0,
+                "y": 0,
+                "z": 0
+              },
+              "quaternion": {
+                "x": 0,
+                "y": 0,
+                "z": 0,
+                "w": 1
+              },
+              "scale": {
+                "x": 1,
+                "y": 1,
+                "z": 1
+              }
+            }
+          ]
+        }
+      },
+      "widgets_values": [
+        "",
+        2496,
+        1024
+      ],
+      "widgets_values_named": {
+        "viewport_state": "",
+        "width": 2496,
+        "height": 1024
+      }
+    },
+    {
+      "id": 140,
+      "type": "Image2PointLoadMoGe3",
+      "pos": [
+        -468.8570976949824,
+        -890.6579952676105
+      ],
+      "size": [
+        330.98203125,
+        82
+      ],
+      "flags": {},
+      "order": 1,
+      "mode": 0,
+      "inputs": [],
+      "outputs": [
+        {
+          "name": "moge3",
+          "type": "I2P_MOGE3",
+          "links": [
+            403
+          ]
+        }
+      ],
+      "properties": {
+        "Node name for S&R": "Image2PointLoadMoGe3"
+      },
+      "widgets_values": [
+        "model.pt",
+        "FP16"
+      ],
+      "widgets_values_named": {
+        "checkpoint": "model.pt",
+        "precision": "FP16"
+      }
+    },
+    {
+      "id": 170,
+      "type": "VHS_LoadImagesPath",
+      "pos": [
+        -1265.7064067671108,
+        -1172.4614460013215
+      ],
+      "size": [
+        373.8870574674777,
+        370.70420429330863
+      ],
+      "flags": {},
+      "order": 2,
+      "mode": 0,
+      "inputs": [
+        {
+          "name": "meta_batch",
+          "shape": 7,
+          "type": "VHS_BatchManager",
+          "link": null
+        }
+      ],
+      "outputs": [
+        {
+          "name": "IMAGE",
+          "type": "IMAGE",
+          "links": [
+            405,
+            414
+          ]
+        },
+        {
+          "name": "MASK",
+          "type": "MASK",
+          "links": []
+        },
+        {
+          "name": "frame_count",
+          "type": "INT",
+          "links": []
+        }
+      ],
+      "properties": {
+        "Node name for S&R": "VHS_LoadImagesPath"
+      },
+      "widgets_values": {
+        "directory": "PATH/TO/ROTO_SEQUENCE",
+        "image_load_cap": 24,
+        "skip_first_images": 0,
+        "select_every_nth": 1,
+        "videopreview": {
+          "hidden": false,
+          "paused": false,
+          "params": {
+            "image_load_cap": 24,
+            "skip_first_images": 0,
+            "select_every_nth": 1,
+            "filename": "PATH/TO/ROTO_SEQUENCE",
+            "type": "path",
+            "format": "folder"
+          }
+        }
+      },
+      "widgets_values_named": {
+        "directory": "PATH/TO/ROTO_SEQUENCE",
+        "image_load_cap": 24,
+        "skip_first_images": 0,
+        "select_every_nth": 1,
+        "videopreview": {
+          "hidden": false,
+          "paused": false,
+          "params": {
+            "image_load_cap": 24,
+            "skip_first_images": 0,
+            "select_every_nth": 1,
+            "filename": "PATH/TO/ROTO_SEQUENCE",
+            "type": "path",
+            "format": "folder"
+          }
+        }
+      }
+    },
+    {
+      "id": 172,
+      "type": "Image2PointGeneratePointCloud",
+      "pos": [
+        -462.89742082359544,
+        -731.2012753467723
+      ],
+      "size": [
+        335.5005859375,
+        334
+      ],
+      "flags": {},
+      "order": 5,
+      "mode": 0,
+      "inputs": [
+        {
+          "name": "moge3",
+          "type": "I2P_MOGE3",
+          "link": 403
+        },
+        {
+          "name": "plates",
+          "type": "IMAGE",
+          "link": 408
+        },
+        {
+          "name": "actor_tracks",
+          "shape": 7,
+          "type": "SAM3_TRACK_DATA",
+          "link": null
+        },
+        {
+          "name": "roto",
+          "shape": 7,
+          "type": "IMAGE",
+          "link": 405
+        }
+      ],
+      "outputs": [
+        {
+          "name": "point_cloud",
+          "shape": 6,
+          "type": "FILE_3D_PLY",
+          "links": [
+            406
+          ]
+        },
+        {
+          "name": "houdini_cache",
+          "type": "STRING",
+          "links": null
+        }
+      ],
+      "properties": {
+        "Node name for S&R": "Image2PointGeneratePointCloud"
+      },
+      "widgets_values": [
+        "PATH/TO/TRACKED_CAMERA.usda",
+        "Max - Full",
+        1001,
+        1024,
+        1001,
+        9,
+        3,
+        "Y",
+        "",
+        "SHOT_NAME"
+      ],
+      "widgets_values_named": {
+        "camera_usd": "PATH/TO/TRACKED_CAMERA.usda",
+        "output_resolution": "Max - Full",
+        "start_frame": 1001,
+        "end_frame": 1024,
+        "input_first_frame": 1001,
+        "inference_quality": 9,
+        "refinement_steps": 3,
+        "up_axis": "Y",
+        "camera_prim": "",
+        "output_directory": "SHOT_NAME"
+      }
+    },
+    {
+      "id": 177,
+      "type": "PreviewImage",
+      "pos": [
+        -1269.9682302234962,
+        -744.4514304981541
+      ],
+      "size": [
+        612.5381152343748,
+        379.90989945845183
+      ],
+      "flags": {},
+      "order": 4,
+      "mode": 0,
+      "inputs": [
+        {
+          "name": "images",
+          "type": "IMAGE",
+          "link": 414
+        }
+      ],
+      "outputs": [
+        {
+          "name": "images",
+          "type": "IMAGE",
+          "links": []
+        }
+      ],
+      "properties": {
+        "Node name for S&R": "PreviewImage"
+      },
+      "widgets_values": [],
+      "widgets_values_named": {}
+    }
+  ],
+  "links": [
+    [
+      403,
+      140,
+      0,
+      172,
+      0,
+      "I2P_MOGE3"
+    ],
+    [
+      405,
+      170,
+      0,
+      172,
+      3,
+      "IMAGE"
+    ],
+    [
+      406,
+      172,
+      0,
+      131,
+      0,
+      "FILE_3D_PLY"
+    ],
+    [
+      408,
+      13,
+      0,
+      172,
+      1,
+      "IMAGE"
+    ],
+    [
+      414,
+      170,
+      0,
+      177,
+      0,
+      "IMAGE"
+    ],
+    [
+      8,
+      9,
+      0,
+      13,
+      0,
+      "IMAGE"
+    ]
+  ],
+  "groups": [
+    {
+      "id": 3,
+      "title": "Image2Point",
+      "bounding": [
+        -505.50028605335274,
+        -1102.8582786526586,
+        1294.234475463867,
+        760.9792635803226
+      ],
+      "color": "#b06634",
+      "flags": {}
+    },
+    {
+      "id": 4,
+      "title": "Plate",
+      "bounding": [
+        -2021.9663573599225,
+        -1020.1642508722257,
+        662.6745057373048,
+        472.0096853637697
+      ],
+      "color": "#3f789e",
+      "flags": {}
+    },
+    {
+      "id": 5,
+      "title": "Roto",
+      "bounding": [
+        -1331.2274152467069,
+        -1332.9007576391016,
+        765.3280590820309,
+        1004.4400369262692
+      ],
+      "color": "#3f789e",
+      "flags": {}
+    }
+  ],
+  "config": {},
+  "extra": {
+    "ds": {
+      "scale": 1,
+      "offset": [
+        2158.2954137929596,
+        1651.1109034853803
+      ]
+    },
+    "frontendVersion": "1.53.10",
+    "VHS_latentpreview": false,
+    "VHS_latentpreviewrate": 0,
+    "VHS_MetadataImage": true,
+    "VHS_KeepIntermediate": true
+  },
+  "version": 0.4
+}

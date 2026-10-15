@@ -1,0 +1,42 @@
+[build-system]
+requires = ["setuptools>=77"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "image2point"
+version = "0.1.3"
+description = "MoGe-3 tracked-camera point clouds for VFX occlusion, via ComfyUI and Houdini"
+readme = "README.md"
+license = "MIT"
+license-files = ["LICENSE"]
+requires-python = ">=3.11"
+dependencies = ["numpy==2.4.6", "Pillow==12.3.0", "usd-core==26.8"]
+
+[project.optional-dependencies]
+# torch is installed separately (CUDA or CPU wheel index); see README.
+dev = ["pytest==8.4.2", "ruff==0.13.3"]
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+python_files = ["test_*.py"]  # tests/houdini/smoke_test.py runs inside hython, not pytest
+pythonpath = ["src", "tests"]
+addopts = "-ra"
+markers = [
+    "gpu: real MoGe-3 inference; skipped without CUDA or local weights",
+    "houdini: Houdini HDA smoke test via hython; skipped without Houdini",
+]
+
+[tool.ruff]
+line-length = 120
+target-version = "py311"
+extend-exclude = ["cache", "dist", "outputs", "_review"]
+
+[tool.ruff.lint]
+select = ["E", "F", "W", "I"]
+
+[tool.ruff.lint.per-file-ignores]
+# Embedded after point_package.py in the HDA PythonModule; json, os, Path, np and helpers come from there.
+"integrations/houdini/hda_runtime.py" = ["F821"]

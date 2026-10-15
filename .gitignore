@@ -1,0 +1,56 @@
+# Python
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+*.egg-info/
+build/
+dist/
+
+# Local settings and credentials
+.env
+.env.*
+!.env.example
+.idea/
+.vscode/
+*.log
+
+# Production inputs, weights, caches and generated output
+/tests/test_shot/
+data/
+plates/
+roto/
+cameras/
+scans/
+weights/
+checkpoints/
+cache/
+outputs/
+_review/
+publishes/
+*.exr
+*.dpx
+*.usd
+*.usda
+*.usdc
+*.usdz
+*.abc
+*.vdb
+*.ply
+*.npz
+*.npy
+*.pt
+*.pth
+*.safetensors
+*.blend
+*.blend[0-9]
+*.hdanc
+*.hipnc
+
+# OS
+Thumbs.db
+.DS_Store
+

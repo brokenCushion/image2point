@@ -1,0 +1,4 @@
+# Sources for the two requirements.txt packages that are not on PyPI.
+# Pure Python, pinned to the tested commits. Used when downloading or building wheels.
+utils3d_moge @ https://github.com/EasternJournalist/utils3d-moge/archive/62f09d58509485564e24d5d9f6aac9ee9ebc0c37.zip
+flex-gemm @ https://github.com/JeffreyXiang/FlexGEMM/archive/b2fadb29d41846c7981ade6801ffc689fae119cf.zip

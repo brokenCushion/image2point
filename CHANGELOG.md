@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## 0.1.1 — farm-ready Houdini asset, custom output path
 
 - ComfyUI: optional **`output_path`** input. When connected, files are written as given
   (`<path>.####.npz`, `.ply`, `<path>.manifest.json`) with no versioning; Output Directory

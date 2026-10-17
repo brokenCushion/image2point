@@ -115,20 +115,20 @@ The screenshots and clips illustrate one sample scene; they are not quality guar
 Set **Point Cloud Cache** to the manifest path returned by Generate Point Cloud's
 `houdini_cache` output. The manifest points to the frame data and camera information.
 
-**Outputs and the farm.** The asset has two outputs:
+**Preview and render.** The node is for baking BGEO, not for rendering or simulating from directly.
 
-- **Output 0, Render:** full resolution with plate colours, never the viewport checks. Geometry
-  ROPs and Local Bake write this.
-- **Output 1, Preview:** Preview Point Spacing plus Roto Check and ID Check, for the viewport.
+- **The node's output is the Preview:** Preview Point Spacing plus Roto Check and ID Check, for
+  the viewport. Anything connected after the node gets the Preview too.
+- **`OUT_RENDER` inside the node is the Render:** full resolution with plate colours, never the
+  viewport checks. Local Bake writes it; for the farm, point a Geometry ROP at it.
 
 ```
-/obj/geo1:  Image2Point Proxy ─ output 0 ─▶ RENDER (Null, render flag)
-                              └ output 1 ─▶ PREVIEW (Null, display flag)
-/out:       Geometry ROP (SOP Path → RENDER) ─▶ studio farm submission node
+/out:  Geometry ROP (SOP Path → /obj/geo1/image2point_proxy1/OUT_RENDER) ─▶ studio farm node
 ```
 
-The viewport cooks only the Preview, so the full-resolution Render is computed only when a ROP
-or Local Bake asks for it. Farm machines need `image2point_proxy.hda` on their asset path.
+The viewport cooks only the Preview; the full Render is computed only when a ROP or Local Bake
+asks for it. Farm machines need the asset installed (for example by the studio's HDA publish
+tool). Load the baked BGEO with a File SOP for rendering.
 
 ### Global
 
@@ -173,7 +173,7 @@ The clips below show the effect of changing an actor's edge repair and edge exte
 ### Display
 
 Display checks help inspect masks and actor assignments in the viewport. They affect only
-the Preview output (output 1); the Render output and every bake keep the plate colors.
+the node's Preview; `OUT_RENDER` and every bake keep the plate colors.
 
 **Roto Check** shows roto colors on points. In this example, green, blue, and red identify the
 three roto regions.
@@ -189,9 +189,10 @@ been assigned; the background appears grey.
 
 For quick tests on this machine. Type an **Output File** with a frame number, for example
 `$HIP/test/points.$F4.bgeo.sc`, choose inclusive start and end frames, and press **Bake
-Locally**. It writes the Render output, prepares frames in parallel, and overwrites existing
-files like a Geometry ROP. For the farm, connect a Geometry ROP on the Render output to the
-studio's submission node instead (see Outputs and the farm above).
+Locally**. It writes the full-resolution `OUT_RENDER` points, prepares frames in parallel, and
+overwrites existing files like a Geometry ROP. For the farm, point a Geometry ROP at
+`OUT_RENDER` and connect it to the studio's submission node instead (see Preview and render
+above).
 
 See [Using Image2Point](usage.md) for setup and bake behavior.
 

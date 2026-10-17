@@ -96,8 +96,9 @@ individually.
 
 ### Bake
 
-**Render output:** the asset's output 0 is full resolution and clean, ready for a standard
-Geometry ROP and a studio farm submission node.
+**Farm:** point a standard Geometry ROP at the asset's internal `OUT_RENDER` (full resolution,
+no viewport checks) and connect it to a studio farm submission node. The node itself shows a
+light preview in the viewport.
 
 **Local Bake:** bakes the Render output on this machine to a typed path, for quick tests.
 

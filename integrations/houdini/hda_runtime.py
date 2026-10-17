@@ -11,7 +11,7 @@ import hou
 # Bake Locally prepares this many upcoming frames in background threads (about 2 GB each
 # for a 4K frame). Measured on a 4K shot: 2 and 4 threads are equally fast (Python's lock
 # and Houdini's main-thread geometry steps are the limit), 8 is slower. Farm bakes go through
-# a standard Geometry ROP on the Render output instead.
+# a standard Geometry ROP on the asset's internal OUT_RENDER instead.
 LOCAL_BAKE_WORKERS = 2
 
 # Depth stabilisation reads every frame of a package once; keep the result per manifest for the
@@ -212,7 +212,7 @@ def manifest_changed(node):
 
 
 def bake_locally(node):
-    """Bake Locally button: what a Geometry ROP on the Render output writes, with frames prepared in parallel."""
+    """Bake Locally button: what a Geometry ROP on OUT_RENDER writes, with frames prepared in parallel."""
     if hou.isUIAvailable():
         with hou.InterruptableOperation("Baking point clouds", open_interrupt_dialog=True) as progress:
             progress.updateProgress(0.0)
@@ -221,7 +221,7 @@ def bake_locally(node):
 
 
 def bake(node, workers=1, progress=None):
-    """Local Bake: write the Render output (full resolution, no viewport checks) to Output File.
+    """Local Bake: write the OUT_RENDER points (full resolution, no viewport checks) to Output File.
 
     One file per frame from Start to End; existing files are overwritten, like a Geometry ROP.
     On error or cancel the files written by this bake are removed. Returns the written paths.

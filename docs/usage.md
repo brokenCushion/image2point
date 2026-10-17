@@ -87,25 +87,25 @@ world space.
   unused ID). Once any row exists, only actors with a row are shown; untick **Keep**
   to drop one. **Depth Smoothing (frames)** steadies that actor's overall depth over time
   (0 = off); keep it low for fast movement toward or away from camera.
-- **Local Bake → Bake Locally:** writes the Render output to **Output File**, one file
-  per frame (include a frame number such as `$F4`), with progress and cancellation.
-  Existing files are overwritten, like a Geometry ROP. For quick tests; the farm route
-  is a Geometry ROP (below).
+- **Local Bake → Bake Locally:** writes the full-resolution `OUT_RENDER` points to
+  **Output File**, one file per frame (include a frame number such as `$F4`), with progress
+  and cancellation. Existing files are overwritten, like a Geometry ROP. For quick tests;
+  the farm route is a Geometry ROP (below).
 
-**Outputs and the farm.** The asset has two outputs:
+**Preview and render.** The node is for baking BGEO, not for rendering or simulating from directly.
 
-- **Output 0, Render:** full resolution with plate colours, never the viewport checks. Geometry
-  ROPs and Local Bake write this.
-- **Output 1, Preview:** Preview Point Spacing plus Roto Check and ID Check, for the viewport.
+- **The node's output is the Preview:** Preview Point Spacing plus Roto Check and ID Check, for
+  the viewport. Anything connected after the node gets the Preview too.
+- **`OUT_RENDER` inside the node is the Render:** full resolution with plate colours, never the
+  viewport checks. Local Bake writes it; for the farm, point a Geometry ROP at it.
 
 ```
-/obj/geo1:  Image2Point Proxy ─ output 0 ─▶ RENDER (Null, render flag)
-                              └ output 1 ─▶ PREVIEW (Null, display flag)
-/out:       Geometry ROP (SOP Path → RENDER) ─▶ studio farm submission node
+/out:  Geometry ROP (SOP Path → /obj/geo1/image2point_proxy1/OUT_RENDER) ─▶ studio farm node
 ```
 
-The viewport cooks only the Preview, so the full-resolution Render is computed only when a ROP
-or Local Bake asks for it. Farm machines need `image2point_proxy.hda` on their asset path.
+The viewport cooks only the Preview; the full Render is computed only when a ROP or Local Bake
+asks for it. Farm machines need the asset installed (for example by the studio's HDA publish
+tool). Load the baked BGEO with a File SOP for rendering.
 
 Point attributes: `P`, `Cd`, `object_id` (0 = background), `pscale`, `uv`,
 `source_pixel`, and `roto` when a roto was connected.

@@ -98,8 +98,10 @@ def main():
                 "bake",
             ]
             assert node.parm("farm") is None and node.parm("publish_directory") is None
-            # Output 0 is the full-resolution render; output 1 is the viewport preview.
-            assert node.type().maxNumOutputs() == 2
+            # One output: the viewport Preview. The full-resolution Render is the internal OUT_RENDER.
+            assert node.type().maxNumOutputs() == 1
+            out_render = hou.node(node.path() + "/OUT_RENDER")
+            assert out_render is not None and out_render.type().name() == "null"
             # Edge Repair and Extension start at 1 (also per actor); Depth Tolerance starts off, since it
             # flattens actors that span a long depth.
             assert node.evalParm("inset") == 1 and node.evalParm("extension") == 1
@@ -166,20 +168,20 @@ def main():
             node.parm("actor_controls").set(0)
             # Check colours are viewport only. Roto Check shows the roto's own colours.
             node.parm("roto_check").set(True)
-            roto_view = node.geometry(1)
+            roto_view = node.geometry()
             shown = np.array(roto_view.pointFloatAttribValues("Cd"))
             assert np.array_equal(shown, np.array(roto_view.pointFloatAttribValues("roto")))
             assert np.isclose(shown.reshape(-1, 3), np.float16(0.9) * np.array([1, 0, 0])).all(1).any()
             node.parm("roto_check").set(False)
             node.parm("id_check").set(True)
-            checked = node.geometry(1)
+            checked = node.geometry()
             ids = np.array(checked.pointIntAttribValues("object_id"))
             cd = np.array(checked.pointFloatAttribValues("Cd")).reshape(-1, 3)
             assert len({tuple(cd[ids == actor][0]) for actor in (1, 2)}) == 2, "each actor gets its own colour"
             assert all(len({tuple(c) for c in cd[ids == actor]}) == 1 for actor in (1, 2))
-            # Point spacing and checks reach only the preview: output 0 stays full resolution with plate colour.
+            # Point spacing and checks reach only the preview: OUT_RENDER stays full resolution with plate colour.
             node.parm("preview_stride").set(4)
-            render, preview = node.geometry(0), node.geometry(1)
+            render, preview = out_render.geometry(), node.geometry()
             full = module.frame_values(str(sample), int(hou.frame()), module.settings(node, True))[1]
             assert len(render.points()) == len(full["P"]) > len(preview.points())
             assert np.allclose(np.array(render.pointFloatAttribValues("Cd")), full["Cd"].ravel())
@@ -220,11 +222,9 @@ def main():
             assert loaded.findPointAttrib("pscale") and loaded.findPointAttrib("Alpha") is None
             baked_roto = np.array(loaded.pointFloatAttribValues("roto")).reshape(-1, 3)
             assert np.isclose(baked_roto, np.float16(0.9) * np.array([1, 0, 0])).all(1).any()  # RGB roto attribute
-            # A standard Geometry ROP on output 0 (the studio farm route) writes the same points.
-            render_null = container.createNode("null", "RENDER")
-            render_null.setInput(0, node, 0)
+            # A standard Geometry ROP on OUT_RENDER (the studio farm route) writes the same points.
             rop = hou.node("/out").createNode("geometry", "image2point_rop")
-            rop.parm("soppath").set(render_null.path())
+            rop.parm("soppath").set(out_render.path())
             rop.parm("sopoutput").set(str(Path(directory) / "rop" / "points.$F4.bgeo.sc"))
             (Path(directory) / "rop").mkdir()
             rop.render(frame_range=(1001, 1003))  # Its f1/f2 fields hold expressions that set() would not change

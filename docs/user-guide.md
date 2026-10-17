@@ -64,6 +64,7 @@ versioned package containing the Houdini cache and PLY files.
 | `refinement_steps` | 3 | MoGe-3 refinement count from 0 to 16. Higher is not always better. |
 | `up_axis` | Y | Sets the package coordinate convention to Y-up or Z-up. Match the intended Houdini scene convention. |
 | `camera_prim` | Empty | USD camera prim path. Leave blank when the USD contains exactly one camera; specify a prim when it contains multiple cameras. |
+| `output_path` | Not connected | Optional input socket. Connect a path without a file extension, for example from a pipeline naming node. Image2Point then writes `<path>.####.npz`, `<path>.####.ply` and `<path>.manifest.json` as given, with no versioning of its own, and ignores `output_directory`. Running again with identical results reuses the files; different results at the same path are refused. |
 | `output_directory` | Empty | Optional package folder. An absolute path uses that location; a plain name goes under ComfyUI's output folder. Packages are versioned (`_v001`, `_v002`, and so on) and existing results are not overwritten. Leave blank for an automatic folder under `ComfyUI/output/image2point`. |
 
 #### Outputs
@@ -71,7 +72,7 @@ versioned package containing the Houdini cache and PLY files.
 | Socket | Type | What it contains |
 | --- | --- | --- |
 | `point_cloud` | `FILE_3D_PLY` list | One PLY file per generated frame. Connect it to ComfyUI's Preview Point Cloud or a compatible 3D save node. |
-| `houdini_cache` | String | The path to the package's `manifest.json`. Use this path in Houdini's Point Cloud Cache parameter. The manifest describes the per-frame NPZ cache and camera data. |
+| `houdini_cache` | String | The path to the package's manifest (`manifest.json`, or `<path>.manifest.json` with `output_path`). Use this path in Houdini's Point Cloud Cache parameter. The manifest describes the per-frame NPZ cache and camera data. |
 
 The PLY files are for ComfyUI preview and compatible 3D nodes. Houdini reads the manifest
 and NPZ frame files from the same package. Keep the package together when moving it to
@@ -107,11 +108,27 @@ first roto image corresponds to plate frame 1001, as set by `input_first_frame`.
 ## Houdini
 
 Image2Point turns the per-frame point-cloud cache into an editable Houdini proxy. This guide
-follows the Image2Point Proxy tabs in order: **Global**, **Actors**, **Display**, and **Bake**.
+follows the Image2Point Proxy tabs in order: **Global**, **Actors**, **Display**, and
+**Local Bake**.
 The screenshots and clips illustrate one sample scene; they are not quality guarantees.
 
-Set **Point Cloud Cache** to the `manifest.json` path returned by Generate Point Cloud's
+Set **Point Cloud Cache** to the manifest path returned by Generate Point Cloud's
 `houdini_cache` output. The manifest points to the frame data and camera information.
+
+**Outputs and the farm.** The asset has two outputs:
+
+- **Output 0, Render:** full resolution with plate colours, never the viewport checks. Geometry
+  ROPs and Local Bake write this.
+- **Output 1, Preview:** Preview Point Spacing plus Roto Check and ID Check, for the viewport.
+
+```
+/obj/geo1:  Image2Point Proxy ─ output 0 ─▶ RENDER (Null, render flag)
+                              └ output 1 ─▶ PREVIEW (Null, display flag)
+/out:       Geometry ROP (SOP Path → RENDER) ─▶ studio farm submission node
+```
+
+The viewport cooks only the Preview, so the full-resolution Render is computed only when a ROP
+or Local Bake asks for it. Farm machines need `image2point_proxy.hda` on their asset path.
 
 ### Global
 
@@ -155,8 +172,8 @@ The clips below show the effect of changing an actor's edge repair and edge exte
 
 ### Display
 
-Display checks help inspect masks and actor assignments in the viewport. They affect the
-viewport display; baked geometry retains the plate colors.
+Display checks help inspect masks and actor assignments in the viewport. They affect only
+the Preview output (output 1); the Render output and every bake keep the plate colors.
 
 **Roto Check** shows roto colors on points. In this example, green, blue, and red identify the
 three roto regions.
@@ -168,13 +185,13 @@ been assigned; the background appears grey.
 
 ![ID Check colors on the point cloud](images/houdini-id-check.png)
 
-### Bake
+### Local Bake
 
-Choose a publish directory and inclusive start and end frames, then bake the selected range.
-**Bake Locally** writes the frames on this machine. **Prepare Farm Job** creates a job
-description for a farm worker.
-
-![Image2Point Proxy Bake tab with cache, frame range, and bake controls](images/houdini-bake.png)
+For quick tests on this machine. Type an **Output File** with a frame number, for example
+`$HIP/test/points.$F4.bgeo.sc`, choose inclusive start and end frames, and press **Bake
+Locally**. It writes the Render output, prepares frames in parallel, and overwrites existing
+files like a Geometry ROP. For the farm, connect a Geometry ROP on the Render output to the
+studio's submission node instead (see Outputs and the farm above).
 
 See [Using Image2Point](usage.md) for setup and bake behavior.
 

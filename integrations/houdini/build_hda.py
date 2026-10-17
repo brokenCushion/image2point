@@ -22,18 +22,24 @@ def build(destination=None):
     container = hou.node("/obj").createNode("geo", "image2point_builder", run_init_scripts=False)
     try:
         subnet = container.createNode("subnet", "proxy")
-        python = subnet.createNode("python", "POINTS")
-        python.parm("python").set(
-            "node = hou.pwd()\n"
-            "try:\n"
-            "    node.parent().hdaModule().geometry(node.parent(), node.geometry())\n"
-            "except Exception as error:\n"
-            "    raise hou.NodeError(str(error))\n"
-        )
-        python.setDisplayFlag(True)
-        python.setRenderFlag(True)
-        output_node = subnet.createNode("output", "OUT")
-        output_node.setInput(0, python)
+        # Output 0 (Render) is what a Geometry ROP and Local Bake write: full resolution, no
+        # viewport checks. Output 1 (Preview) adds Preview Point Spacing and the checks. Each has
+        # its own Python SOP, so the viewport only cooks the light Preview.
+        for index, (name, bake) in enumerate((("RENDER", True), ("PREVIEW", False))):
+            python = subnet.createNode("python", name)
+            python.parm("python").set(
+                "node = hou.pwd()\n"
+                "try:\n"
+                f"    node.parent().hdaModule().geometry(node.parent(), node.geometry(), bake={bake})\n"
+                "except Exception as error:\n"
+                "    raise hou.NodeError(str(error))\n"
+            )
+            output_node = subnet.createNode("output", "OUT_" + name)
+            output_node.parm("outputidx").set(index)
+            output_node.setInput(0, python)
+            if index == 0:
+                output_node.setDisplayFlag(True)
+                output_node.setRenderFlag(True)
         node = subnet.createDigitalAsset(
             name="image2point::proxy::1.0",
             hda_file_name=str(output),
@@ -41,6 +47,7 @@ def build(destination=None):
             min_num_inputs=0,
             max_num_inputs=0,
         )
+        node.type().definition().setMaxNumOutputs(2)
         group = hou.ParmTemplateGroup()
         manifest = hou.StringParmTemplate(
             "manifest",
@@ -181,22 +188,28 @@ def build(destination=None):
         )
         actors = hou.FolderParmTemplate("actors_section", "Actors", folder_type=hou.folderType.Tabs)
         actors.addParmTemplate(per_actor)
-        bake = hou.FolderParmTemplate("bake_section", "Bake", folder_type=hou.folderType.Tabs, ends_tab_group=True)
+        bake = hou.FolderParmTemplate(
+            "bake_section", "Local Bake", folder_type=hou.folderType.Tabs, ends_tab_group=True
+        )
         bake.addParmTemplate(
             hou.StringParmTemplate(
-                "publish_directory", "Publish Directory", 1, string_type=hou.stringParmType.FileReference
+                "output_file",
+                "Output File",
+                1,
+                default_value=("$HIP/image2point/points.$F4.bgeo.sc",),
+                string_type=hou.stringParmType.FileReference,
+                help=(
+                    "One file per frame; include a frame number such as $F4. Existing files are overwritten. "
+                    "For the farm, use a Geometry ROP on the Render output (output 0) instead."
+                ),
             )
         )
         for name, label, value in [("start", "Start Frame", 1001), ("end", "End Frame", 1024)]:
             bake.addParmTemplate(hou.IntParmTemplate(name, label, 1, default_value=(value,)))
-        for name, label, function in [
-            ("bake", "Bake Locally", "bake_locally"),
-            ("farm", "Prepare Farm Job", "prepare_farm"),
-        ]:
-            button = hou.ButtonParmTemplate(name, label)
-            button.setScriptCallback("kwargs['node'].hdaModule()." + function + "(kwargs['node'])")
-            button.setScriptCallbackLanguage(hou.scriptLanguage.Python)
-            bake.addParmTemplate(button)
+        button = hou.ButtonParmTemplate("bake", "Bake Locally")
+        button.setScriptCallback("kwargs['node'].hdaModule().bake_locally(kwargs['node'])")
+        button.setScriptCallbackLanguage(hou.scriptLanguage.Python)
+        bake.addParmTemplate(button)
         edges = hou.FolderParmTemplate(
             "edge_section",
             "Edge Treatment",
@@ -233,6 +246,8 @@ def build(destination=None):
         definition.addSection(
             "Help",
             "Loads Image2Point full-frame point packages. Use Y-up metre scene space. "
+            "Output 0 (Render) is full resolution for Geometry ROPs and Local Bake; output 1 (Preview) "
+            "applies Preview Point Spacing, Roto Check and ID Check for the viewport. "
             "Depth controls are camera-ray adjustments. "
             "roto (when the package has one), pscale and object_id are baked point attributes. "
             "RenderMan material binding must be validated in your studio. See USAGE.md.",

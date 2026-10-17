@@ -10,8 +10,8 @@ import hou
 
 # Bake Locally prepares this many upcoming frames in background threads (about 2 GB each
 # for a 4K frame). Measured on a 4K shot: 2 and 4 threads are equally fast (Python's lock
-# and Houdini's main-thread geometry steps are the limit), 8 is slower. The farm job bakes
-# one frame at a time.
+# and Houdini's main-thread geometry steps are the limit), 8 is slower. Farm bakes go through
+# a standard Geometry ROP on the Render output instead.
 LOCAL_BAKE_WORKERS = 2
 
 # Depth stabilisation reads every frame of a package once; keep the result per manifest for the
@@ -93,12 +93,26 @@ def create_points(target, positions):
 
 
 def cached_measure(manifest_path):
-    """measure_shot reads every frame once; keep its (scales, actor depths) per manifest."""
+    """(scales, actor depths) for a package, kept per manifest for the session.
+
+    ComfyUI stores them in the manifest, so normally nothing is measured here; every farm task
+    is a fresh Houdini and would otherwise re-read the whole shot. Older packages without the
+    stored block are measured once (measure_shot reads every frame).
+    """
     path = Path(manifest_path)
     key = (str(path.resolve()), path.stat().st_mtime_ns)
     with SCALES_LOCK:
         if key not in SCALES:
-            SCALES[key] = measure_shot(path)
+            stored = json.loads(path.read_text()).get("stabilisation")
+            if stored:
+                scales = {int(frame): scale for frame, scale in stored["scales"].items()}
+                depths = {
+                    int(actor): {int(frame): depth for frame, depth in values.items()}
+                    for actor, values in stored["actor_depths"].items()
+                }
+                SCALES[key] = (scales, depths)
+            else:
+                SCALES[key] = measure_shot(path)
         return SCALES[key]
 
 
@@ -198,7 +212,7 @@ def manifest_changed(node):
 
 
 def bake_locally(node):
-    """Bake Locally button: same output as the farm bake, with frames prepared in parallel."""
+    """Bake Locally button: what a Geometry ROP on the Render output writes, with frames prepared in parallel."""
     if hou.isUIAvailable():
         with hou.InterruptableOperation("Baking point clouds", open_interrupt_dialog=True) as progress:
             progress.updateProgress(0.0)
@@ -206,21 +220,22 @@ def bake_locally(node):
     return bake(node, workers=LOCAL_BAKE_WORKERS)
 
 
-def bake(node, destination=None, workers=1, progress=None):
-    root = Path(destination or node.evalParm("publish_directory")).expanduser()
-    if not str(root) or str(root) == ".":
-        raise ValueError("Choose a shared Publish Directory")
-    root = root.resolve()
+def bake(node, workers=1, progress=None):
+    """Local Bake: write the Render output (full resolution, no viewport checks) to Output File.
+
+    One file per frame from Start to End; existing files are overwritten, like a Geometry ROP.
+    On error or cancel the files written by this bake are removed. Returns the written paths.
+    """
     start, end = node.evalParm("start"), node.evalParm("end")
     if end < start:
         raise ValueError("End frame must be at or after Start frame")
-    filenames = ["points.%04d.bgeo.sc" % frame for frame in range(start, end + 1)]
-    for filename in ["manifest.json", *filenames]:
-        if (root / filename).exists():
-            raise FileExistsError("Preserving existing cache: " + str(root / filename) + ". Choose another folder.")
-    root.mkdir(parents=True, exist_ok=True)
+    paths = [Path(node.parm("output_file").evalAtFrame(frame)).expanduser() for frame in range(start, end + 1)]
+    if not str(paths[0]) or str(paths[0]) == ".":
+        raise ValueError("Choose an Output File, e.g. $HIP/image2point/points.$F4.bgeo.sc")
+    if len(set(paths)) != len(paths):
+        raise ValueError("Output File needs a frame number such as $F4, or every frame overwrites the same file")
     previous = hou.frame()
-    entries = []
+    written = []
     temporary = None
     try:
         # Parameters can be animated: read every frame's settings here, on the main thread.
@@ -228,81 +243,22 @@ def bake(node, destination=None, workers=1, progress=None):
         for frame in range(start, end + 1):
             hou.setFrame(frame)
             jobs.append((frame, node.evalParm("manifest"), settings(node, True)))
-        for (frame, manifest_path, cfg), (manifest, values) in computed(jobs, workers):
+        for path, ((frame, manifest_path, cfg), (manifest, values)) in zip(paths, computed(jobs, workers)):
             output = hou.Geometry()
             write_geometry(output, manifest, values, manifest_path)
-            filename = "points.%04d.bgeo.sc" % frame
-            temporary = root / (uuid.uuid4().hex + "." + filename)
+            path.parent.mkdir(parents=True, exist_ok=True)
+            temporary = path.with_name(uuid.uuid4().hex + "." + path.name)
             output.saveToFile(str(temporary))
-            os.replace(temporary, root / filename)
-            entries.append({"frame": frame, "file": filename, "settings": cfg})
+            os.replace(temporary, path)
+            written.append(path)
             if progress is not None:
-                progress.updateProgress(len(entries) / len(jobs))
-        json_write(
-            root / "manifest.json",
-            {
-                "kind": "image2point.render_cache",
-                "color_space": "linear_srgb",
-                "version": 1,
-                "houdini_license": str(hou.licenseCategory()),
-                "source": node.evalParm("manifest"),
-                "fps": manifest["fps"],
-                "up_axis": manifest["up_axis"],
-                "meters_per_unit": 1.0,
-                "frames": entries,
-            },
-        )
-    except Exception:
-        for entry in entries:
-            (root / entry["file"]).unlink(missing_ok=True)
+                progress.updateProgress(len(written) / len(jobs))
+    except BaseException:
+        for path in written:
+            path.unlink(missing_ok=True)
         if temporary is not None:
             temporary.unlink(missing_ok=True)
         raise
     finally:
         hou.setFrame(previous)
-    return str(root / "manifest.json")
-
-
-def prepare_farm(node):
-    """Freeze this HDA (including animated controls) in a new HIP for studio submission."""
-    if hou.licenseCategory() == hou.licenseCategoryType.Apprentice:
-        raise ValueError(
-            "Apprentice is for isolated local tests. Use Bake Locally; "
-            "prepare studio farm jobs with a commercial license."
-        )
-    directory = node.evalParm("publish_directory").strip()
-    if not directory:
-        raise ValueError("Choose a shared Publish Directory first")
-    root = Path(directory).resolve() / ("job_" + uuid.uuid4().hex)
-    root.mkdir(parents=True, exist_ok=False)
-    # Store the exact asset definition with the job; no installed HDA needed on workers.
-    definition = node.type().definition()
-    definition.save(str(root / "image2point.hda"))
-    original = hou.hipFile.path()
-    original_manifest = node.parm("manifest").unexpandedString()
-    absolute_manifest = str(Path(node.evalParm("manifest")).resolve())
-    suffix = Path(original).suffix if Path(original).suffix in (".hip", ".hiplc", ".hipnc") else ".hip"
-    scene = root / ("bake" + suffix)
-    try:
-        node.parm("manifest").set(absolute_manifest)
-        hou.hipFile.save(str(scene), save_to_recent_files=False)
-    finally:
-        hou.hipFile.setName(original)
-        node.parm("manifest").set(original_manifest)
-    json_write(
-        root / "job.json",
-        {
-            "scene": scene.name,
-            "asset": "image2point.hda",
-            "node": node.path(),
-            "publish_directory": str(Path(directory).resolve()),
-        },
-    )
-    if hou.isUIAvailable():
-        hou.ui.displayMessage(
-            "Farm job saved:\n"
-            + str(root / "job.json")
-            + "\nSubmit with the supplied farm_bake.py using your studio Houdini runner."
-            + "\nNo job has been submitted automatically."
-        )
-    return str(root / "job.json")
+    return [str(path) for path in written]

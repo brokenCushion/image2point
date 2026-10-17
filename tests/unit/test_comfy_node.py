@@ -175,3 +175,78 @@ def test_output_directory_is_the_package_folder_and_versions(tmp_path):
         assert run(output_directory="relative_name") == tmp_path / "relative_name_v001"  # Plain name: ComfyUI output
         automatic = run(output_directory="")
         assert automatic.parent == tmp_path / "image2point" and len(automatic.name) == 16
+
+
+def test_custom_output_path_writes_flat_files_without_versions(tmp_path):
+    """A connected output_path is used as given: no _v001, Output Directory ignored."""
+    import json
+    from pathlib import Path
+    from unittest.mock import patch
+
+    import numpy as np
+
+    from image2point.point_package import camera_points, load_frame, measure_shot
+
+    class FakeEngine:
+        def __init__(self, *args):
+            pass
+
+        def predict(self, rgb, k):
+            return camera_points(np.full(rgb.shape[:2], 4), k), np.ones(rgb.shape[:2]), {}
+
+    checkpoint, source = stand_in_moge(tmp_path)
+    shots = tmp_path / "shots"
+    path = shots / "BA001_pole_v003"
+    with comfy_node(tmp_path, checkpoint, source) as node, patch("image2point.moge3.MoGe3Engine", FakeEngine):
+        (model,) = node.LoadMoGe3().load("local.pt", "FP16")
+        args = {
+            **sample_args(tmp_path, model),
+            "start_frame": 1001,
+            "output_directory": str(tmp_path / "ignored"),
+            "output_path": str(path),
+        }
+        files, manifest_path = generate_package(node, **args)
+        assert Path(manifest_path) == shots / "BA001_pole_v003.manifest.json"
+        assert sorted(p.name for p in shots.iterdir()) == [
+            "BA001_pole_v003.1001.npz",
+            "BA001_pole_v003.1001.ply",
+            "BA001_pole_v003.1002.npz",
+            "BA001_pole_v003.1002.ply",
+            "BA001_pole_v003.manifest.json",
+        ]
+        assert [Path(f.get_source()).name for f in files] == ["BA001_pole_v003.1001.ply", "BA001_pole_v003.1002.ply"]
+        assert not (tmp_path / "ignored").exists() and not list(tmp_path.glob("ignored_v*"))
+        manifest, _, arrays = load_frame(manifest_path, 1002)
+        assert arrays["P"].shape[:2] == (48, 64)
+        # Stabilisation is measured once here, so Houdini (and every farm task) just reads it.
+        scales, depths = measure_shot(manifest_path)
+        stored = manifest["stabilisation"]
+        assert {int(f): s for f, s in stored["scales"].items()} == scales
+        assert {int(a): {int(f): d for f, d in v.items()} for a, v in stored["actor_depths"].items()} == depths
+
+        # Same path, same results: reused. Same path, different results: refused, first files intact.
+        before = {p.name: p.read_bytes() for p in shots.iterdir()}
+        assert generate_package(node, **args)[1] == manifest_path
+        with pytest.raises(ValueError, match="already holds different results"):
+            generate_package(node, **{**args, "actor_tracks": None})
+        assert {p.name: p.read_bytes() for p in shots.iterdir()} == before
+
+        with pytest.raises(ValueError, match="output_path is connected but empty"):
+            generate_package(node, **{**args, "output_path": "  "})
+        _, relative = generate_package(node, **{**args, "output_path": "rel/take_a"})
+        assert Path(relative) == tmp_path / "rel" / "take_a.manifest.json"
+
+        # A failure partway leaves nothing behind (no frames, no staging, no temporary files).
+        failing = tmp_path / "failing" / "take_b"
+        with patch("image2point.io.write_ply", side_effect=[None, RuntimeError("disk full")]):
+            with pytest.raises(RuntimeError, match="disk full"):
+                generate_package(node, **{**args, "output_path": str(failing)})
+        assert not failing.parent.exists() or list(failing.parent.iterdir()) == []
+
+        # Crash leftovers (frame files with no manifest) are overwritten.
+        leftover = tmp_path / "left" / "take_c.1001.npz"
+        leftover.parent.mkdir()
+        leftover.write_bytes(b"stale")
+        _, recovered = generate_package(node, **{**args, "output_path": str(tmp_path / "left" / "take_c")})
+        assert leftover.read_bytes() != b"stale"
+        assert json.loads(Path(recovered).read_text())["frames"][0]["file"] == "take_c.1001.npz"

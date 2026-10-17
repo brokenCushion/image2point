@@ -31,6 +31,9 @@ ComfyUI's `input` folder and set the camera path to `sample/camera.usda`.
 Key controls:
 - **Input First Frame**: the frame number of the first plate in the batch.
 - **Output Resolution**: start with half or quarter.
+- **Output Path** (optional input): connect a path from your pipeline's naming node
+  and Image2Point writes `<path>.####.npz`, `<path>.####.ply` and `<path>.manifest.json`
+  with no versioning of its own; Output Directory is then ignored.
 - **Output Directory**: the package folder, on shared storage. Saved as `_v001`;
   never overwritten: new results go to `_v002`, `_v003` and so on.
 
@@ -66,8 +69,8 @@ world space.
 - **Depth Offset:** moves points along the camera rays (negative is closer).
 - **Global → Stabilisation → Stabilize Depth** (on by default): removes MoGe's
   frame-to-frame depth "breathing" by matching each frame's scale to its neighbours,
-  measured on the static background. The first cook reads every frame once (about 25 s
-  for 100 frames at 2K).
+  measured on the static background. ComfyUI stores the measurement in the manifest;
+  packages made before that are measured on the first cook (about 25 s for 100 frames at 2K).
 - **Global → Stabilisation → Background Smoothing (frames):** averages the static set
   with this many frames each side to calm surface shimmer. 0 (default) is off; each step
   adds about 1 s per frame at 2K.
@@ -84,10 +87,25 @@ world space.
   unused ID). Once any row exists, only actors with a row are shown; untick **Keep**
   to drop one. **Depth Smoothing (frames)** steadies that actor's overall depth over time
   (0 = off); keep it low for fast movement toward or away from camera.
-- **Bake Locally:** writes `points.####.bgeo.sc` and `manifest.json` directly into
-  Publish Directory, with per-frame progress and cancellation. Existing cache files
-  are not overwritten; choose another folder for a new bake.
-- **Prepare Farm Job:** saves a job to run with `hython farm_bake.py <job.json>`.
+- **Local Bake → Bake Locally:** writes the full-resolution `OUT_RENDER` points to
+  **Output File**, one file per frame (include a frame number such as `$F4`), with progress
+  and cancellation. Existing files are overwritten, like a Geometry ROP. For quick tests;
+  the farm route is a Geometry ROP (below).
+
+**Preview and render.** The node is for baking BGEO, not for rendering or simulating from directly.
+
+- **The node's output is the Preview:** Preview Point Spacing plus Roto Check and ID Check, for
+  the viewport. Anything connected after the node gets the Preview too.
+- **`OUT_RENDER` inside the node is the Render:** full resolution with plate colours, never the
+  viewport checks. Local Bake writes it; for the farm, point a Geometry ROP at it.
+
+```
+/out:  Geometry ROP (SOP Path → /obj/geo1/image2point_proxy1/OUT_RENDER) ─▶ studio farm node
+```
+
+The viewport cooks only the Preview; the full Render is computed only when a ROP or Local Bake
+asks for it. Farm machines need the asset installed (for example by the studio's HDA publish
+tool). Load the baked BGEO with a File SOP for rendering.
 
 Point attributes: `P`, `Cd`, `object_id` (0 = background), `pscale`, `uv`,
 `source_pixel`, and `roto` when a roto was connected.

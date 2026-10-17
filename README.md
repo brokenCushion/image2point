@@ -96,10 +96,11 @@ individually.
 
 ### Bake
 
-**Bake Locally** and **Prepare Farm Job:** bake the adjusted frames on this machine, or
-prepare a job for a farm worker.
+**Farm:** point a standard Geometry ROP at the asset's internal `OUT_RENDER` (full resolution,
+no viewport checks) and connect it to a studio farm submission node. The node itself shows a
+light preview in the viewport.
 
-![Houdini Bake tab](docs/images/houdini-bake.png)
+**Local Bake:** bakes the Render output on this machine to a typed path, for quick tests.
 
 [Houdini controls and bake instructions →](docs/user-guide.md#houdini)
 

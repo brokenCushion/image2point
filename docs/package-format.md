@@ -23,6 +23,15 @@ float `linear_r`, `linear_g`, `linear_b` attributes carry linear colour.
 Roto is data and receives no colour conversion. BGEO `Cd` is linear sRGB, labelled by
 the detail attribute `i2p_color_space`; an ACEScg workflow needs a working-space transform.
 
+**`stabilisation`** (in the manifest): per-frame depth scales and each actor's depth per
+frame, measured once by ComfyUI so Houdini does not re-read the shot. Older packages without
+it are measured by the Houdini asset on first cook.
+
+**Custom output path:** with `output_path` connected, the files sit flat beside the path:
+`<path>.####.npz`, `<path>.####.ply`, `<path>.manifest.json`. The manifest is written last
+and carries a `package_key`; the same results at the same path are reused, different results
+are refused, and frame files left without a manifest by an interrupted run are replaced.
+
 **Rules:** a package is written to a staging folder and published only when every frame
 succeeds. It is saved as `<name>_v001` and never overwritten: different results go to `_v002`,
 `_v003` and so on, and

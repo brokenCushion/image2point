@@ -17,7 +17,7 @@ from pathlib import Path
 import folder_paths
 import numpy as np
 
-from image2point.point_package import atomic, json_write, srgb_to_linear, tag_masks
+from image2point.point_package import atomic, json_write, measure_shot, srgb_to_linear, tag_masks
 
 # Name of the model folder ComfyUI searches for checkpoints: models/image2point, plus any
 # "image2point:" entries a studio adds to extra_model_paths.yaml (e.g. a server share).
@@ -178,6 +178,40 @@ def publish(staging, target, key, versioned):
     raise ValueError(f"No free version left for output directory '{target}'")
 
 
+def file_names(stem):
+    """Frame, PLY and manifest names: a package folder's layout, or flat files beside a custom path."""
+    if stem is None:
+        return "frame.{:04d}.npz", "points.{:04d}.ply", "manifest.json"
+    return stem + ".{:04d}.npz", stem + ".{:04d}.ply", stem + ".manifest.json"
+
+
+def publish_flat(staging, folder, manifest_name, key):
+    """Move finished flat files beside a custom output path, the manifest last; return the folder.
+
+    The caller owns names and versions, so an existing manifest is reused only when it holds
+    exactly these results and is otherwise never overwritten. Frame files without a manifest
+    are leftovers of an interrupted run and are replaced. If a move fails, the files already
+    moved are removed again, so a manifest on disk always means a complete package.
+    """
+    manifest = folder / manifest_name
+    if manifest.is_file():
+        if json.loads(manifest.read_text()).get("package_key") == key:
+            return folder
+        raise ValueError(f"{manifest} already holds different results; connect a new output path")
+    folder.mkdir(parents=True, exist_ok=True)
+    moved = []
+    try:
+        for name in sorted(path.name for path in staging.iterdir() if path.name != manifest_name):
+            os.replace(staging / name, folder / name)
+            moved.append(folder / name)
+        os.replace(staging / manifest_name, manifest)
+    except BaseException:
+        for path in moved:
+            path.unlink(missing_ok=True)
+        raise
+    return folder
+
+
 class GeneratePointCloud:
     """The ComfyUI node itself. ComfyUI reads the class attributes below to build the node."""
 
@@ -233,6 +267,15 @@ class GeneratePointCloud:
                 ),
             },
             "optional": {
+                "output_path": (
+                    "STRING",
+                    {
+                        "forceInput": True,
+                        "tooltip": "Connect a custom output path, without a file extension. When connected, "
+                        "Image2Point does not name or version the output, and Output Directory is ignored. "
+                        "Files: <path>.####.npz, <path>.####.ply, <path>.manifest.json.",
+                    },
+                ),
                 "actor_tracks": ("SAM3_TRACK_DATA",),
                 "roto": (
                     "IMAGE",
@@ -271,6 +314,7 @@ class GeneratePointCloud:
         output_directory="",
         actor_tracks=None,
         roto=None,
+        output_path=None,
     ):
         """Run MoGe-3 on each requested frame and write the point-cloud package.
 
@@ -280,7 +324,8 @@ class GeneratePointCloud:
           3. Build the fingerprint ("identity") of this run from the loaded model and settings.
           4. For each frame: get depth (from cache or MoGe-3), apply the actor mask,
              move the points into world space, and save a .npz and a .ply.
-          5. Write manifest.json, then move the finished folder into place.
+          5. Measure depth stabilisation over all frames, write the manifest, then move the
+             finished folder into place (or the flat files beside a connected output_path).
           6. Clean up temporary files and GPU memory.
 
         Returns the list of PLY files (one per frame) and the path to manifest.json.
@@ -336,7 +381,17 @@ class GeneratePointCloud:
             job["camera"]["prim_path"] = camera_prim
         report = camera_frames(job, Path("."))
 
-        if output_directory.strip():
+        stem = None
+        if output_path is not None:
+            # Connected: the caller owns naming and versions; never fall back to a default place.
+            if not output_path.strip():
+                raise ValueError("output_path is connected but empty; connect a path or disconnect it")
+            flat = Path(output_path.strip()).expanduser()
+            if not flat.is_absolute():
+                flat = Path(folder_paths.get_output_directory()) / flat
+            flat = flat.resolve()
+            target, parent, stem = None, flat.parent, flat.name
+        elif output_directory.strip():
             target = Path(output_directory.strip()).expanduser()
             if not target.is_absolute():
                 target = Path(folder_paths.get_output_directory()) / target
@@ -344,6 +399,7 @@ class GeneratePointCloud:
             parent = target.parent
         else:
             target, parent = None, Path(folder_paths.get_output_directory()) / "image2point"
+        frame_name, ply_name, manifest_name = file_names(stem)
         # MoGe depth cache: only this node reads it (re-runs skip inference). ComfyUI empties its
         # temp folder at startup and shutdown, so the cache lasts one ComfyUI session.
         depth_cache = Path(folder_paths.get_temp_directory()) / "image2point-depth"
@@ -452,7 +508,7 @@ class GeneratePointCloud:
                 world = (local @ pose[:3, :3].T + pose[:3, 3]).astype(np.float32)
                 record = {
                     "frame": frame["frame"],
-                    "file": f"frame.{frame['frame']:04d}.npz",
+                    "file": frame_name.format(frame["frame"]),
                     "c2w": pose.tolist(),
                     "K": k.tolist(),
                     "K_plate": frame["K_plate"],
@@ -495,7 +551,7 @@ class GeneratePointCloud:
 
                 # Keep only points with a real depth value; invalid ones are skipped in the PLY.
                 valid = np.isfinite(world).all(-1) & (local[..., 2] > 0)
-                ply_names.append(f"points.{frame['frame']:04d}.ply")
+                ply_names.append(ply_name.format(frame["frame"]))
                 attributes = {
                     "object_id": labels[valid],
                     "source_pixel": np.arange(ih * iw, dtype=np.int32).reshape(ih, iw)[valid],
@@ -517,13 +573,28 @@ class GeneratePointCloud:
                     attributes=attributes,
                 )
                 progress.update(1)
-            json_write(staging / "manifest.json", manifest)
+            # Depth stabilisation is measured once here, over every frame, so Houdini (and each
+            # farm task) reads it from the manifest instead of re-reading the whole shot.
+            json_write(staging / manifest_name, manifest)
+            scales, actor_depths = measure_shot(staging / manifest_name)
+            manifest["stabilisation"] = {
+                "smoothing": 12.0,
+                "neighbours": 3,
+                "scales": {str(f): s for f, s in scales.items()},
+                "actor_depths": {str(a): {str(f): d for f, d in v.items()} for a, v in actor_depths.items()},
+            }
+            json_write(staging / manifest_name, manifest)
             package_key.update(
                 json.dumps({key: value for key, value in manifest.items() if key != "frames"}, sort_keys=True).encode()
             )
             # The package folder is named by a short hash of everything inside it.
             key = package_key.hexdigest()
-            publication = publish(staging, target or parent / key[:16], key, versioned=target is not None)
+            if stem is None:
+                publication = publish(staging, target or parent / key[:16], key, versioned=target is not None)
+            else:
+                manifest["package_key"] = key
+                json_write(staging / manifest_name, manifest)
+                publication = publish_flat(staging, parent, manifest_name, key)
         finally:
             # Runs even if an error happened: remove leftovers and free GPU memory.
             shutil.rmtree(staging, ignore_errors=True)
@@ -533,4 +604,4 @@ class GeneratePointCloud:
                 torch.cuda.empty_cache()
         # Wrap each PLY path so ComfyUI can show it in its 3D preview and save nodes.
         point_files = [Types.File3D(str(publication / name), "ply") for name in ply_names]
-        return (point_files, str(publication / "manifest.json"))
+        return (point_files, str(publication / manifest_name))
